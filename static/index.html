@@ -36,7 +36,7 @@
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
   label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
   select, input[type=number], input.hm { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
-  input.hm { width: 84px; font-size: 18px; font-family: ui-monospace, Menlo, monospace; text-align: center; direction: ltr; }
+  input.hm { min-width: 110px; font-size: 20px; color-scheme: dark; font-family: ui-monospace, Menlo, monospace; text-align: center; direction: ltr; unicode-bidi: isolate; }
   .check { display: flex; align-items: center; gap: 8px; }
   .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; }
   .kv span:nth-child(odd) { color: var(--muted); }
@@ -93,7 +93,7 @@
       <h2>תזמון</h2>
       <div class="row">
         <label class="check"><input type="checkbox" id="schStartOn"> התחל בשעה</label>
-        <input type="text" id="schStart" class="hm" inputmode="numeric" placeholder="21:30" maxlength="5">
+        <input type="time" dir="ltr" id="schStart" class="hm">
       </div>
       <div class="row" style="margin-top:10px">
         <label class="check"><input type="checkbox" id="schStopOn"> עצור</label>
@@ -101,7 +101,7 @@
           <option value="time">בשעה</option>
           <option value="dur">אחרי (דקות)</option>
         </select>
-        <input type="text" id="schStop" class="hm" inputmode="numeric" placeholder="23:00" maxlength="5">
+        <input type="time" dir="ltr" id="schStop" class="hm">
         <input type="number" id="schDur" min="1" value="90" style="width:80px;display:none">
       </div>
       <div class="row" style="margin-top:12px">

@@ -301,13 +301,14 @@ class CameraController:
         """gphoto2 can't write movie quality (0xD1CD), so release the camera,
         write it over raw PTP, and reconnect. Only one of the options the
         camera itself offers is ever sent, based on its own current value."""
-        # Disabled: writing only 0xD1CD seems to leave the camera half-switched
-        # (the menu also updates related movie props), after which the screen
-        # stayed dark while connected and record-start hung the camera.
-        raise CameraError("שינוי איכות מהמחשב כבוי — שנה איכות מתפריט המצלמה")
         self._require()
         if self.recording or self.want_recording:
             raise CameraError("אי אפשר לשנות איכות וידאו בזמן צילום")
+        # the hangs first blamed on this write all happened while Chrome also
+        # held the camera's USB device — never write while anything else does
+        self.usb_conflicts = usb_holders()
+        if self.usb_conflicts:
+            raise CameraError(f"{', '.join(self.usb_conflicts)} מחזיק את המצלמה — סגור אותו לפני שינוי איכות")
         mq = self.movie_quality
         cur = mq.current
         opt = next((o for o in mq.options if o["size"] == size and o["fps100"] == fps100), None)

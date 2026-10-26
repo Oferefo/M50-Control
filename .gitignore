@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+captures/
+state.json
+state.json.tmp
+.DS_Store

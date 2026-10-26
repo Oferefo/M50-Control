@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>M50 Control</title>
+<style>
+  :root {
+    --bg: #111317; --panel: #1b1e24; --line: #2a2f38; --text: #e8eaed; --muted: #8b93a1;
+    --rec: #e5484d; --ok: #30a46c; --warn: #f5a524; --accent: #4f8cff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 -apple-system, "Segoe UI", Arial, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; }
+  .pill { padding: 3px 10px; border-radius: 999px; background: var(--line); color: var(--muted); font-size: 13px; }
+  .pill.ok { background: rgba(48,164,108,.18); color: #5fd49a; }
+  .pill.bad { background: rgba(229,72,77,.18); color: #ff8589; }
+  main { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; padding: 16px 20px; max-width: 1300px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; padding: 12px 16px; } }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  section h2 { font-size: 14px; color: var(--muted); font-weight: 600; margin: 0 0 12px; }
+  .rec-box { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .timer { font: 600 38px/1 ui-monospace, Menlo, monospace; min-width: 150px; }
+  .timer.on { color: var(--rec); }
+  .dot { width: 14px; height: 14px; border-radius: 50%; background: var(--line); display: inline-block; }
+  .dot.on { background: var(--rec); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .25; } }
+  button { font: inherit; border: 0; border-radius: 10px; padding: 11px 18px; cursor: pointer; background: var(--line); color: var(--text); }
+  button:hover { filter: brightness(1.15); }
+  button:disabled { opacity: .4; cursor: default; filter: none; }
+  button.big { font-size: 17px; padding: 14px 26px; font-weight: 600; }
+  button.rec { background: var(--rec); color: #fff; }
+  button.primary { background: var(--accent); color: #fff; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+  label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
+  select, input[type=number] { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
+  .check { display: flex; align-items: center; gap: 8px; }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  .preview { width: 100%; aspect-ratio: 16/9; background: #000; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: var(--muted); overflow: hidden; }
+  .preview img { width: 100%; height: 100%; object-fit: contain; }
+  ul.list { list-style: none; padding: 0; margin: 0; max-height: 260px; overflow: auto; font-size: 13px; }
+  ul.list li { padding: 6px 0; border-bottom: 1px solid var(--line); display: flex; justify-content: space-between; gap: 8px; }
+  ul.list .t { color: var(--muted); font-family: ui-monospace, Menlo, monospace; }
+  .mode { font-size: 13px; padding: 4px 10px; border-radius: 6px; }
+  .mode.movie { background: rgba(229,72,77,.15); color: #ff8589; }
+  .mode.photo { background: rgba(79,140,255,.15); color: #8ab1ff; }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #3a1416; color: #ffb3b5; border: 1px solid var(--rec); padding: 10px 16px; border-radius: 10px; display: none; max-width: 90vw; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🎥 Canon M50 Control</h1>
+  <span id="conn" class="pill">מתחבר…</span>
+  <span id="mode" class="mode"></span>
+  <span id="battery" class="pill"></span>
+  <span style="flex:1"></span>
+  <button id="reconnect">התחבר מחדש</button>
+</header>
+
+<div id="conflict" style="display:none;background:#3a1416;color:#ffb3b5;border-bottom:1px solid var(--rec);padding:10px 20px;font-size:14px"></div>
+<main>
+  <div>
+    <section>
+      <h2>צילום וידאו</h2>
+      <div class="rec-box">
+        <span id="recdot" class="dot"></span>
+        <span id="timer" class="timer">00:00:00</span>
+        <button id="recStart" class="big rec">● התחל צילום</button>
+        <button id="recStop" class="big">■ עצור</button>
+      </div>
+      <div class="row" style="margin-top:14px">
+        <label class="check"><input type="checkbox" id="autoRestart"> אם המצלמה עוצרת — להתחיל מחדש מיד</label>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <label class="check">פצל קובץ כל <input type="number" id="split" min="0" max="29" style="width:64px"> דקות (0 = לא לפצל)</label>
+      </div>
+      <div id="restarts" style="margin-top:8px;color:var(--muted);font-size:13px"></div>
+    </section>
+
+    <section>
+      <h2>תזמון</h2>
+      <div class="row">
+        <label class="check"><input type="checkbox" id="schStartOn"> התחל בשעה</label>
+        <input type="time" id="schStart">
+      </div>
+      <div class="row" style="margin-top:10px">
+        <label class="check"><input type="checkbox" id="schStopOn"> עצור</label>
+        <select id="schStopMode">
+          <option value="time">בשעה</option>
+          <option value="dur">אחרי (דקות)</option>
+        </select>
+        <input type="time" id="schStop">
+        <input type="number" id="schDur" min="1" value="90" style="width:80px;display:none">
+      </div>
+      <div class="row" style="margin-top:12px">
+        <button id="schSet" class="primary">קבע תזמון</button>
+        <button id="schCancel">בטל תזמון</button>
+      </div>
+      <div id="schStatus" style="margin-top:10px;font-size:14px"></div>
+      <p style="color:var(--muted);font-size:13px;margin:8px 0 0">
+        העצירה המתוזמנת היא סופית — היא גוברת על "התחל מחדש". משך מחושב משעת ההתחלה (או מעכשיו, אם אין שעת התחלה).
+        המחשב לא נכנס לשינה כל עוד האפליקציה רצה, אבל אל תסגור את המכסה.
+      </p>
+    </section>
+
+    <section>
+      <h2>צילום סטילס</h2>
+      <div class="row">
+        <button id="photo" class="big primary">📷 צלם תמונה</button>
+        <button id="af">פוקוס אוטומטי</button>
+        <label class="check"><input type="checkbox" id="dlPhotos"> הורד תמונות למחשב</label>
+      </div>
+      <p style="color:var(--muted);font-size:13px;margin:10px 0 0">
+        מעבר בין וידאו לסטילס נעשה בחוגה הפיזית של המצלמה — האפליקציה מזהה את המצב לבד.
+      </p>
+    </section>
+
+    <section>
+      <h2>תצוגה חיה</h2>
+      <div class="row" style="margin-bottom:10px">
+        <label class="check"><input type="checkbox" id="previewOn"> הצג תצוגה חיה</label>
+      </div>
+      <div class="preview" id="previewBox">כבוי</div>
+      <p style="color:var(--muted);font-size:13px;margin:10px 0 0">
+        כשהתצוגה החיה דלוקה, התפריט של המצלמה נסגר אחרי כמה שניות. כדי לשנות הגדרות בתפריט המצלמה — כבה את התצוגה החיה.
+      </p>
+    </section>
+  </div>
+
+  <div>
+    <section>
+      <h2>מצלמה</h2>
+      <div class="kv" id="info"></div>
+      <div class="row" style="margin-top:12px;display:none">
+        <label class="field">שנה איכות וידאו
+          <select id="mqSelect"></select>
+        </label>
+        <button id="mqApply" style="align-self:flex-end">החל</button>
+      </div>
+      <p style="color:var(--muted);font-size:12px;margin:8px 0 0">שינוי איכות וידאו — רק מתפריט המצלמה.</p>
+      <div class="row" style="margin-top:12px">
+        <button id="syncClock">סנכרן שעון למחשב</button>
+      </div>
+    </section>
+
+    <section>
+      <h2>הגדרות <button id="reloadSettings" style="padding:3px 10px;font-size:12px;margin-inline-start:8px">רענן</button></h2>
+      <div class="grid" id="settings"><span style="color:var(--muted)">טוען…</span></div>
+    </section>
+
+    <section>
+      <h2>קבצים אחרונים</h2>
+      <ul class="list" id="files"></ul>
+    </section>
+
+    <section>
+      <h2>יומן</h2>
+      <ul class="list" id="events"></ul>
+    </section>
+  </div>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let state = {};
+let settingsLoaded = false;
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.style.display = "block";
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.style.display = "none", 5000);
+}
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body === undefined ? "GET" : "POST",
+    headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const j = await r.json().catch(() => ({ ok: false, error: "שגיאת שרת" }));
+  if (j.ok === false) toast(j.error);
+  return j;
+}
+
+function fmt(s) {
+  const h = String(Math.floor(s / 3600)).padStart(2, "0");
+  const m = String(Math.floor(s / 60) % 60).padStart(2, "0");
+  return `${h}:${m}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function render(s) {
+  state = s;
+  const c = $("conn");
+  c.textContent = s.connected ? "מחובר" : (s.error || "לא מחובר");
+  c.className = "pill " + (s.connected ? "ok" : "bad");
+
+  const conflicts = s.usb_conflicts || [];
+  $("conflict").style.display = conflicts.length ? "block" : "none";
+  $("conflict").textContent = conflicts.length
+    ? `⚠️ ${conflicts.join(", ")} מחזיק את חיבור ה-USB של המצלמה — סגור אותו (Cmd+Q). כל עוד הוא פתוח, תחילת צילום עלולה לתקוע את המצלמה, ולכן היא חסומה.`
+    : "";
+
+  const movie = s.info.movie_mode;
+  $("mode").textContent = !s.connected ? "" : movie ? "מצב וידאו" : "מצב סטילס (" + s.info.dial + ")";
+  $("mode").className = "mode " + (movie ? "movie" : "photo");
+  $("battery").textContent = s.info.battery ? "🔋 " + s.info.battery : "";
+
+  $("recdot").className = "dot" + (s.recording ? " on" : "");
+  $("timer").className = "timer" + (s.recording ? " on" : "");
+  $("timer").textContent = fmt(s.rec_seconds);
+  $("recStart").disabled = !s.connected || s.recording || !movie;
+  $("recStop").disabled = !s.connected || (!s.recording && !s.want_recording);
+  $("photo").disabled = !s.connected || movie;
+  $("af").disabled = !s.connected;
+  $("restarts").textContent = s.want_recording && s.restart_count ? `הצילום הותחל מחדש ${s.restart_count} פעמים` : "";
+
+  if (document.activeElement !== $("autoRestart")) $("autoRestart").checked = s.auto_restart;
+  if (document.activeElement !== $("split")) $("split").value = s.split_minutes;
+  $("dlPhotos").checked = s.download_photos;
+  $("previewOn").checked = s.preview_on;
+
+  const mq = s.movie_quality || {};
+  const mqText = mq.current ? `${mq.current.label} (${mq.current.resolution})` : "";
+  $("info").innerHTML = [["דגם", s.info.model], ["עדשה", s.info.lens], ["סוללה", s.info.battery], ["חוגה", s.info.dial],
+      ["איכות וידאו", mqText], ["צילומים פנויים", s.info.shots]]
+    .map(([k, v]) => `<span>${k}</span><span>${esc(v || "—")}</span>`).join("");
+  const optKey = JSON.stringify(mq.options || []);
+  if ($("mqSelect").dataset.k !== optKey) {  // rebuild only when the camera's list changes
+    $("mqSelect").dataset.k = optKey;
+    $("mqSelect").innerHTML = (mq.options || []).map(o =>
+      `<option value="${o.size}:${o.fps100}">${o.label} (${o.resolution})</option>`).join("");
+    if (mq.current) $("mqSelect").value = `${mq.current.size}:${mq.current.fps100}`;
+  }
+  $("mqApply").disabled = !s.connected || s.recording || s.want_recording || !(mq.options || []).length;
+
+  $("files").innerHTML = s.files.map((f, i) => `<li><span>${esc(f.name)} <span class="t">${f.time}</span></span>
+    ${f.local ? `<a href="/captures/${encodeURIComponent(f.name)}" target="_blank">פתח</a>` : `<a href="#" data-i="${i}" class="dl">הורד</a>`}</li>`).join("")
+    || `<li style="color:var(--muted)">עדיין אין</li>`;
+  $("events").innerHTML = s.events.map(e => `<li><span>${esc(e.text)}</span><span class="t">${e.time}</span></li>`).join("");
+
+  renderSchedule(s);
+  if (s.connected && !settingsLoaded) loadSettings();
+  if (!s.connected) settingsLoaded = false;
+}
+
+function clock(epoch) {
+  return new Date(epoch * 1000).toLocaleTimeString("he-IL", { hour: "2-digit", minute: "2-digit" });
+}
+
+function renderSchedule(s) {
+  const lines = [];
+  if (s.schedule_start) lines.push(`▶️ יתחיל ב-${clock(s.schedule_start)} (בעוד ${fmt(Math.max(0, Math.round(s.schedule_start - s.now)))})`);
+  if (s.schedule_stop) lines.push(`⏹ ייעצר סופית ב-${clock(s.schedule_stop)} (בעוד ${fmt(Math.max(0, Math.round(s.schedule_stop - s.now)))})`);
+  if (s.schedule_stop && !s.auto_restart) {
+    const from = s.schedule_start || s.now;
+    if (s.schedule_stop - from > 29 * 60) lines.push(`<span style="color:var(--warn)">⚠️ "התחל מחדש" כבוי — המצלמה תעצור בעצמה אחרי 29:59</span>`);
+  }
+  $("schStatus").innerHTML = lines.join("<br>") || `<span style="color:var(--muted)">אין תזמון</span>`;
+}
+
+// next occurrence of HH:MM (today, or tomorrow if already passed), epoch seconds
+function nextAt(hhmm, after) {
+  const [h, m] = hhmm.split(":").map(Number);
+  const d = new Date(after * 1000);
+  d.setHours(h, m, 0, 0);
+  if (d.getTime() / 1000 <= after) d.setDate(d.getDate() + 1);
+  return Math.floor(d.getTime() / 1000);
+}
+
+$("mqApply").onclick = async e => {
+  const [size, fps100] = $("mqSelect").value.split(":").map(Number);
+  e.target.disabled = true; e.target.textContent = "משנה…";
+  const j = await api("/api/movie-quality", { size, fps100 });
+  e.target.textContent = "החל";
+};
+
+$("schStopMode").onchange = e => {
+  const dur = e.target.value === "dur";
+  $("schStop").style.display = dur ? "none" : "";
+  $("schDur").style.display = dur ? "" : "none";
+};
+
+$("schSet").onclick = async () => {
+  const now = Date.now() / 1000;
+  let start = null, stop = null;
+  if ($("schStartOn").checked) {
+    if (!$("schStart").value) return toast("בחר שעת התחלה");
+    start = nextAt($("schStart").value, now);
+  }
+  if ($("schStopOn").checked) {
+    const from = start || now;
+    if ($("schStopMode").value === "dur") {
+      const min = Number($("schDur").value);
+      if (!(min > 0)) return toast("הזן משך בדקות");
+      stop = Math.floor(from + min * 60);
+    } else {
+      if (!$("schStop").value) return toast("בחר שעת סיום");
+      stop = nextAt($("schStop").value, from);
+    }
+  }
+  if (!start && !stop) return toast("סמן התחלה ו/או עצירה");
+  await api("/api/schedule", { start, stop });
+};
+$("schCancel").onclick = () => api("/api/schedule", { start: null, stop: null });
+
+async function loadSettings() {
+  settingsLoaded = true;
+  const j = await api("/api/settings");
+  if (!j.ok) { settingsLoaded = false; return; }
+  $("settings").innerHTML = j.result.map(s => {
+    const opts = (s.choices.length ? s.choices : [s.value]).map(c => `<option ${c === s.value ? "selected" : ""}>${esc(c)}</option>`).join("");
+    return `<label class="field">${esc(s.label)}<select data-key="${s.key}" ${s.readonly ? "disabled" : ""}>${opts}</select></label>`;
+  }).join("");
+}
+
+async function poll() {
+  try { render(await (await fetch("/api/status")).json()); }
+  catch { $("conn").textContent = "השרת לא זמין"; $("conn").className = "pill bad"; }
+  setTimeout(poll, 700);
+}
+
+$("recStart").onclick = async e => { e.target.disabled = true; await api("/api/record/start", {}); };
+$("recStop").onclick = () => api("/api/record/stop", {});
+$("photo").onclick = async e => { e.target.disabled = true; const j = await api("/api/photo", {}); };
+$("af").onclick = () => api("/api/autofocus", {});
+$("syncClock").onclick = () => api("/api/sync-clock", {});
+$("reconnect").onclick = () => api("/api/reconnect", {});
+$("reloadSettings").onclick = loadSettings;
+$("autoRestart").onchange = e => api("/api/options", { auto_restart: e.target.checked });
+$("split").onchange = e => api("/api/options", { split_minutes: e.target.value });
+$("dlPhotos").onchange = e => api("/api/options", { download_photos: e.target.checked });
+$("previewOn").onchange = async e => {
+  const on = e.target.checked;
+  await api("/api/options", { preview: on });
+  $("previewBox").innerHTML = on ? `<img src="/preview.mjpg?${Date.now()}">` : "כבוי";
+};
+$("settings").onchange = async e => {
+  const k = e.target.dataset.key;
+  if (k) { await api("/api/settings", { key: k, value: e.target.value }); loadSettings(); }
+};
+$("files").onclick = async e => {
+  if (!e.target.classList.contains("dl")) return;
+  e.preventDefault();
+  const f = state.files[e.target.dataset.i];
+  e.target.textContent = "מוריד…";
+  await api("/api/download", { folder: f.folder, name: f.name });
+};
+
+poll();
+</script>
+</body>
+</html>

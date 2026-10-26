@@ -496,6 +496,14 @@ class CameraController:
             "shots": val("availableshots"),
             "movie_mode": val("eosmovieswitch") == "1" or dial == "Movie",
         }
+        try:
+            # standard PTP GetStorageInfo; the M50 has one SD slot
+            sd = self.cam.get_storageinfo()[0]
+            info["card_free_mb"] = sd.freekbytes // 1024
+            info["card_total_mb"] = sd.capacitykbytes // 1024
+        except (gp.GPhoto2Error, IndexError):
+            info["card_free_mb"] = self.info.get("card_free_mb")
+            info["card_total_mb"] = self.info.get("card_total_mb")
         with self._lock:
             self.info = info
 

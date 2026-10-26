@@ -223,8 +223,19 @@ function render(s) {
 
   const mq = s.movie_quality || {};
   const mqText = mq.current ? `${mq.current.label} (${mq.current.resolution})` : "";
+  let cardText = "";
+  if (s.info.card_free_mb != null) {
+    const gb = mb => (mb / 1024).toFixed(1);
+    cardText = `${gb(s.info.card_free_mb)} GB פנוי מתוך ${gb(s.info.card_total_mb)} GB`;
+    // rough Canon M50 IPB bitrates in Mbps, for a ballpark of recording time left
+    const mbps = !mq.current ? null : mq.current.size === 5 ? 120 : mq.current.size === 1 ? 26 : mq.current.fps100 > 5000 ? 60 : 30;
+    if (mbps) {
+      const min = Math.floor(s.info.card_free_mb * 8 / mbps / 60);
+      cardText += ` · בערך ${Math.floor(min / 60)}:${String(min % 60).padStart(2, "0")} שעות וידאו`;
+    }
+  }
   $("info").innerHTML = [["דגם", s.info.model], ["עדשה", s.info.lens], ["סוללה", s.info.battery], ["חוגה", s.info.dial],
-      ["איכות וידאו", mqText], ["צילומים פנויים", s.info.shots]]
+      ["איכות וידאו", mqText], ["כרטיס זיכרון", cardText], ["צילומים פנויים", s.info.shots]]
     .map(([k, v]) => `<span>${k}</span><span>${esc(v || "—")}</span>`).join("");
   const optKey = JSON.stringify(mq.options || []);
   if ($("mqSelect").dataset.k !== optKey) {  // rebuild only when the camera's list changes

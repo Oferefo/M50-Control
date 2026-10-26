@@ -35,7 +35,8 @@
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
   label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--muted); }
-  select, input[type=number] { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
+  select, input[type=number], input.hm { font: inherit; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 7px 8px; }
+  input.hm { width: 84px; font-size: 18px; font-family: ui-monospace, Menlo, monospace; text-align: center; direction: ltr; }
   .check { display: flex; align-items: center; gap: 8px; }
   .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 14px; font-size: 14px; }
   .kv span:nth-child(odd) { color: var(--muted); }
@@ -92,7 +93,7 @@
       <h2>תזמון</h2>
       <div class="row">
         <label class="check"><input type="checkbox" id="schStartOn"> התחל בשעה</label>
-        <input type="time" id="schStart">
+        <input type="text" id="schStart" class="hm" inputmode="numeric" placeholder="21:30" maxlength="5">
       </div>
       <div class="row" style="margin-top:10px">
         <label class="check"><input type="checkbox" id="schStopOn"> עצור</label>
@@ -100,7 +101,7 @@
           <option value="time">בשעה</option>
           <option value="dur">אחרי (דקות)</option>
         </select>
-        <input type="time" id="schStop">
+        <input type="text" id="schStop" class="hm" inputmode="numeric" placeholder="23:00" maxlength="5">
         <input type="number" id="schDur" min="1" value="90" style="width:80px;display:none">
       </div>
       <div class="row" style="margin-top:12px">
@@ -310,6 +311,25 @@ function renderSchedule(s) {
   $("schStatus").innerHTML = lines.join("<br>") || `<span style="color:var(--muted)">אין תזמון</span>`;
 }
 
+// "21:30", "9:05", "2130", "930", "21" -> "21:30" etc.; null if not a valid time of day
+function parseHM(text) {
+  const t = text.trim().replace(/[.\s]/g, ":");
+  let m = t.match(/^(\d{1,2}):(\d{2})$/) || t.match(/^(\d{1,2})(\d{2})$/) || t.match(/^(\d{1,2})$/);
+  if (!m) return null;
+  const h = Number(m[1]), min = Number(m[2] || 0);
+  if (h > 23 || min > 59) return null;
+  return `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}`;
+}
+
+// tidy the field as the user leaves it ("2130" -> "21:30")
+document.querySelectorAll("input.hm").forEach(el => el.addEventListener("blur", () => {
+  const v = parseHM(el.value);
+  if (v) el.value = v;
+}));
+// typing a time ticks its checkbox
+$("schStart").addEventListener("input", () => { $("schStartOn").checked = true; });
+$("schStop").addEventListener("input", () => { $("schStopOn").checked = true; });
+
 // next occurrence of HH:MM (today, or tomorrow if already passed), epoch seconds
 function nextAt(hhmm, after) {
   const [h, m] = hhmm.split(":").map(Number);
@@ -336,8 +356,9 @@ $("schSet").onclick = async () => {
   const now = Date.now() / 1000;
   let start = null, stop = null;
   if ($("schStartOn").checked) {
-    if (!$("schStart").value) return toast("בחר שעת התחלה");
-    start = nextAt($("schStart").value, now);
+    const hhmm = parseHM($("schStart").value);
+    if (!hhmm) return toast("שעת התחלה לא תקינה — כתוב למשל 21:30 (שעות 0–23)");
+    start = nextAt(hhmm, now);
   }
   if ($("schStopOn").checked) {
     const from = start || now;
@@ -346,8 +367,9 @@ $("schSet").onclick = async () => {
       if (!(min > 0)) return toast("הזן משך בדקות");
       stop = Math.floor(from + min * 60);
     } else {
-      if (!$("schStop").value) return toast("בחר שעת סיום");
-      stop = nextAt($("schStop").value, from);
+      const hhmm = parseHM($("schStop").value);
+      if (!hhmm) return toast("שעת סיום לא תקינה — כתוב למשל 23:00 (אחרי חצות: 00:30)");
+      stop = nextAt(hhmm, from);
     }
   }
   if (!start && !stop) return toast("סמן התחלה ו/או עצירה");
